@@ -9,16 +9,23 @@ import { signIn } from '@/auth';
 const InvoiceSchema = z.object({
   id: z.string(),
   customerId: z.string({
-    invalid_type_error: 'Please select a customer.',
+      invalid_type_error: 'Please select a customer',
+      required_error: 'Please select a customer'
+  })   ,
+  amount: z.coerce.number({
+      invalid_type_error: 'Please enter an amount',
+      required_error: 'Please enter an amount'
   }),
-  amount: z.coerce
-    .number()
-    .gt(0, { message: 'Please enter an amount greater than $0.' }),
-  status: z.enum(['pending', 'paid'], {
-    invalid_type_error: 'Please select an invoice status.',
+  status: z.enum(['paid', 'pending', 'draft'], {
+      invalid_type_error: 'Please select a status',
+      required_error: 'Please select a status'
   }),
   date: z.string(),
 });
+
+const UpdateIvnvoice = InvoiceSchema.omit({id: true, date: true});
+
+
 
 // This is temporary until @types/react-dom is updated
 export type State = {
@@ -69,35 +76,22 @@ export async function createInvoice(prevState: State, formData: FormData) {
   redirect('/dashboard/invoices');
 }
 
-export async function updateInvoice(
-  id: string,
-  prevState: State,
-  formData: FormData
-) {
-  const validatedFields = UpdateInvoice.safeParse({
-    customerId: formData.get('customerId'),
-    amount: formData.get('amount'),
-    status: formData.get('status'),
-  });
-
-  if (!validatedFields.success) {
-    return {
-      errors: validatedFields.error.flatten().fieldErrors,
-      message: 'Missing Fields. Failed to Update Invoice.',
-    };
-  }
-
-  const { customerId, amount, status } = validatedFields.data;
-  const amountInCents = amount * 100;
+export async function updateInvoice(id: string, formData: FormData) {
+  const rawFormData = UpdateIvnvoice.parse(Object.fromEntries(formData.entries()));
+  const amountInCents = rawFormData.amount * 100;
 
   try {
-    await sql`
+      await sql`
       UPDATE invoices
-      SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
+      SET customer_id = ${rawFormData.customerId},
+          amount = ${amountInCents},
+          status = ${rawFormData.status}
       WHERE id = ${id}
-    `;
+      `
   } catch (error) {
-    return { message: 'Database Error: Failed to Update Invoice.' };
+      return {
+          message: 'Something went wrong',
+      }
   }
 
   revalidatePath('/dashboard/invoices');
